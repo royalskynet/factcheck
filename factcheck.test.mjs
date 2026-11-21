@@ -58,6 +58,20 @@ test('fact checking keeps factual sentences and leaves speculation in the same q
   ]);
 });
 
+test('qualifiers after a quote apply to all sentences in it', async () => {
+  for (const text of ['「月費是20元。年費是200元」均未驗證。', '「月費是20元。年費是200元。」均未驗證。']) {
+    assert.deepEqual(sentences(text), [text]);
+    const result = await checkFacts({
+      text,
+      evidence: '費用表',
+      verify: async () => assert.fail('qualified quotes must not reach the verifier'),
+    });
+    assert.deepEqual(result.claims, []);
+    assert.equal(result.skipped, 'no_claim');
+    assert.deepEqual(selectFacts(`${text}費用必須先付。`), ['費用必須先付。']);
+  }
+});
+
 test('an inch mark does not start an ASCII quote', () => {
   assert.deepEqual(
     sentences('螢幕是 6"。官方說"費用必須先付嗎？"後來才更正。'),

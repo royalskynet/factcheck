@@ -26,6 +26,9 @@ function* splitLine(line) {
         const quoted = line.slice(quoteStart, i);
         boundary = QUOTED_TERMINATOR.test(quoted) ||
           (!(prefix + line.slice(start, quoteStart)).trim() && QUESTION_END.test(quoted));
+        const [tail] = line.slice(i + 1).split(TERMINATOR, 1)[0].split(/\.(?=\s)/, 1);
+        const separateTail = boundary && /^[\s,，]*(?:但|不過|然而|(?:but|however)\b)/i.test(tail);
+        if (!separateTail && INFER.test(tail)) continue;
         const attribution = prefix + line.slice(start, quoteStart + 1);
         for (const end of quoteEnds) {
           if (!line.slice(end + 1, i).trim()) break;
