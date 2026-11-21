@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectFacts, checkFacts, decisive } from './index.js';
+import { selectFacts, checkFacts, decisive, sentences } from './index.js';
 
 const REPLY = [
   '五種協議各自要另外繳月費。',
@@ -21,6 +21,17 @@ test('selectFacts ignores code blocks and dedupes', () => {
 test('selectFacts respects a zero limit and splits on Chinese question marks', () => {
   assert.deepEqual(selectFacts(REPLY, { max: 0 }), []);
   assert.deepEqual(selectFacts('官方收費嗎？費用是 20 元。'), ['費用是 20 元。']);
+});
+
+test('quoted punctuation does not split factual sentences', () => {
+  const title = '《你今天快樂嗎？》於2020年出版。';
+  assert.deepEqual(sentences(title), [title]);
+  for (const quote of ['「費用必須先付嗎？」', '『費用必須先付嗎？』', '《費用必須先付嗎？》', '"費用必須先付嗎？"']) {
+    const claim = `官方說${quote}後來才更正。`;
+    assert.deepEqual(selectFacts(`${claim}費用是 20 元。`), [claim, '費用是 20 元。']);
+  }
+  const nested = '官方說「書名是《費用必須先付嗎？》；已經出版。」後來才更正。';
+  assert.deepEqual(selectFacts(nested), [nested]);
 });
 
 test('no evidence -> every fact is not_addressed without calling the verifier', async () => {

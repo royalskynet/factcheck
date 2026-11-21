@@ -5,6 +5,25 @@
 export const FACT = /(\d+(?:\.\d+)?\s*(?:[uU]\b|USDT?|USD|美元|元|%|％)|月費|年費|收費|計費|費用|價格|定價|費率|另外|另購|分別|各自|每(?:種|個|次|筆|月)|必須|需要|須|應當|規定|要求|義務|禁止|包含|含有|涵蓋|只有|僅|全部|文件(?:寫|說|有|提)|官方(?:說|寫|表示)|條文|第\s*\d+\s*(?:條|行|頁)|\b(?:must|required|includes?|fee|price|charged?)\b)/i;
 export const INFER = /(推論|推測|我認為|看起來|據我理解|未驗證|未證實|不確定|待確認|可能|也許|應該是|\binferr?ed\b|\bassum(?:e|ption)\b|\bunverified\b)/i;
 
+const QUOTES = new Map([['「', '」'], ['『', '』'], ['《', '》'], ['"', '"']]);
+
+function* splitLine(line) {
+  const closing = [];
+  let start = 0;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === closing.at(-1)) {
+      closing.pop();
+    } else if (QUOTES.has(char)) {
+      closing.push(QUOTES.get(char));
+    } else if (!closing.length && (/[。！!？；;]/.test(char) || (char === '.' && /\s/.test(line[i + 1] ?? '')))) {
+      yield line.slice(start, i + 1);
+      start = i + 1;
+    }
+  }
+  yield line.slice(start);
+}
+
 /** Sentence-level split: drops code blocks, list markers and bold markers. */
 export function sentences(text) {
   const body = String(text ?? '')
@@ -12,7 +31,7 @@ export function sentences(text) {
     .replace(/<options>[\s\S]*?<\/options>/g, '\n');
   const out = [];
   for (const line of body.split('\n')) {
-    for (const raw of line.split(/(?<=[。！!？；;])\s*|(?<=\.)\s+/)) {
+    for (const raw of splitLine(line)) {
       const s = raw
         .replace(/^\s*(?:[-*>#]+|\d+[.)、])\s*/, '')
         .replace(/\*\*/g, '')
