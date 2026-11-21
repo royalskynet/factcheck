@@ -5,10 +5,10 @@
 export const FACT = /(\d+(?:\.\d+)?\s*(?:[uU]\b|USDT?|USD|美元|元|%|％)|月費|年費|收費|計費|費用|價格|定價|費率|另外|另購|分別|各自|每(?:種|個|次|筆|月)|必須|需要|須|應當|規定|要求|義務|禁止|包含|含有|涵蓋|只有|僅|全部|文件(?:寫|說|有|提)|官方(?:說|寫|表示)|條文|第\s*\d+\s*(?:條|行|頁)|\b(?:must|required|includes?|fee|price|charged?)\b)/i;
 export const INFER = /(推論|推測|我認為|看起來|據我理解|未驗證|未證實|不確定|待確認|可能|也許|應該是|\binferr?ed\b|\bassum(?:e|ption)\b|\bunverified\b)/i;
 
-const QUOTES = new Map([['「', '」'], ['『', '』'], ['《', '》'], ['"', '"']]);
+const QUOTES = new Map([['「', '」'], ['『', '』'], ['《', '》'], ['〈', '〉'], ['"', '"']]);
 const TERMINATOR = /[。！!？；;]/;
 const QUOTED_TERMINATOR = /[。！!；;.][」』"]*$/;
-const QUESTION_END = /[?？][」』》"]*\s*$/;
+const QUESTION_END = /[?？][」』"’]*\s*$/;
 
 function* splitLine(line) {
   const quotes = [];
@@ -19,7 +19,7 @@ function* splitLine(line) {
     let boundary = false;
     if (char === quotes.at(-1)) {
       quotes.pop();
-      if (!quotes.length && char !== '》') {
+      if (!quotes.length && char !== '》' && char !== '〉') {
         const quoted = line.slice(quoteStart, i);
         boundary = QUOTED_TERMINATOR.test(quoted) ||
           (!line.slice(start, quoteStart).trim() && QUESTION_END.test(quoted));

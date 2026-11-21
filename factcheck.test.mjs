@@ -49,11 +49,18 @@ test('an inch mark does not start an ASCII quote', () => {
 });
 
 test('standalone quoted questions are not factual claims', () => {
-  for (const question of ['「這要收費嗎？」', '『這要收費嗎？』', '《這要收費嗎？》', '"這要收費嗎？"']) {
+  for (const question of ['「這要收費嗎？」', '『這要收費嗎？』', '"這要收費嗎？"', '‘這要收費嗎？’']) {
     assert.equal(isFactClaim(question), false);
     assert.deepEqual(selectFacts(question), []);
   }
   assert.deepEqual(selectFacts('「這要收費嗎？」費用是 20 元。'), ['費用是 20 元。']);
+});
+
+test('claims can end in a title that contains a question', () => {
+  for (const claim of ['手冊包含《需要收費嗎？》', '手冊包含〈需要收費嗎？〉']) {
+    assert.equal(isFactClaim(claim), true);
+    assert.deepEqual(selectFacts(claim), [claim]);
+  }
 });
 
 test('no evidence -> every fact is not_addressed without calling the verifier', async () => {
