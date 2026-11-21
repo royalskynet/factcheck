@@ -12,7 +12,7 @@ export function sentences(text) {
     .replace(/<options>[\s\S]*?<\/options>/g, '\n');
   const out = [];
   for (const line of body.split('\n')) {
-    for (const raw of line.split(/(?<=[。！!；;])\s*|(?<=\.)\s+/)) {
+    for (const raw of line.split(/(?<=[。！!？；;])\s*|(?<=\.)\s+/)) {
       const s = raw
         .replace(/^\s*(?:[-*>#]+|\d+[.)、])\s*/, '')
         .replace(/\*\*/g, '')
@@ -33,6 +33,7 @@ export function isFactClaim(s) {
  *   shadow ledger shows it keeps inferences or drops real claims.
  */
 export function selectFacts(text, { max = 8 } = {}) {
+  if (max <= 0) return [];
   const seen = new Set();
   const out = [];
   for (const s of sentences(text)) {

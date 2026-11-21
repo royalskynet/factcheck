@@ -18,6 +18,11 @@ test('selectFacts ignores code blocks and dedupes', () => {
   assert.deepEqual(selectFacts('```\n每月 10 USD\n```\n費用必須先付。\n費用必須先付。'), ['費用必須先付。']);
 });
 
+test('selectFacts respects a zero limit and splits on Chinese question marks', () => {
+  assert.deepEqual(selectFacts(REPLY, { max: 0 }), []);
+  assert.deepEqual(selectFacts('官方收費嗎？費用是 20 元。'), ['費用是 20 元。']);
+});
+
 test('no evidence -> every fact is not_addressed without calling the verifier', async () => {
   let called = false;
   const r = await checkFacts({ text: REPLY, evidence: '', verify: async () => { called = true; } });
@@ -47,6 +52,25 @@ test('verifier error is reported, never turned into a verdict', async () => {
 
 test('no fact claim -> skipped', async () => {
   assert.equal((await checkFacts({ text: '今天天氣很好呢。' })).skipped, 'no_claim');
+});
+
+test('invalid verifier verdicts return an error without partial judgments', async (t) => {
+  const valid = { verdict: 'supported', gate: 'auto' };
+  for (const [name, claims, error] of [
+    ['missing array', undefined, /exactly 2 verdicts/],
+    ['too few', [valid], /exactly 2 verdicts/],
+    ['too many', [valid, valid, valid], /exactly 2 verdicts/],
+    ['missing verdict', [valid, {}], /missing or unknown verdict for claim 2/],
+    ['unknown verdict', [valid, { verdict: 'bogus' }], /missing or unknown verdict for claim 2/],
+  ]) {
+    await t.test(name, async () => {
+      const result = await checkFacts({ text: REPLY, evidence: 'x', verify: async () => ({ claims }) });
+      assert.match(result.error, error);
+      assert.equal(result.claims.length, 2);
+      assert.deepEqual(result.judged, []);
+      assert.equal(result.decisive, null);
+    });
+  }
 });
 
 test('decisive ranks confident contradiction over not_addressed', () => {
