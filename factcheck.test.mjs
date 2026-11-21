@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectFacts, checkFacts, decisive, sentences } from './index.js';
+import { selectFacts, checkFacts, decisive, isFactClaim, sentences } from './index.js';
 
 const REPLY = [
   '五種協議各自要另外繳月費。',
@@ -31,7 +31,29 @@ test('quoted punctuation does not split factual sentences', () => {
     assert.deepEqual(selectFacts(`${claim}費用是 20 元。`), [claim, '費用是 20 元。']);
   }
   const nested = '官方說「書名是《費用必須先付嗎？》；已經出版。」後來才更正。';
-  assert.deepEqual(selectFacts(nested), [nested]);
+  assert.deepEqual(selectFacts(nested), ['官方說「書名是《費用必須先付嗎？》；已經出版。」']);
+});
+
+test('a quote ending in a full stop ends the sentence after the closing quote', () => {
+  const claim = '他說「價格是100元。」';
+  assert.deepEqual(sentences(`${claim}但可能會漲。`), [claim, '但可能會漲。']);
+  assert.deepEqual(selectFacts(`${claim}但可能會漲。`), [claim]);
+});
+
+test('an inch mark does not start an ASCII quote', () => {
+  assert.deepEqual(
+    sentences('螢幕是 6"。官方說"費用必須先付嗎？"後來才更正。'),
+    ['螢幕是 6"。', '官方說"費用必須先付嗎？"後來才更正。'],
+  );
+  assert.deepEqual(selectFacts('螢幕是 6"。費用是 20 元。'), ['費用是 20 元。']);
+});
+
+test('standalone quoted questions are not factual claims', () => {
+  for (const question of ['「這要收費嗎？」', '『這要收費嗎？』', '《這要收費嗎？》', '"這要收費嗎？"']) {
+    assert.equal(isFactClaim(question), false);
+    assert.deepEqual(selectFacts(question), []);
+  }
+  assert.deepEqual(selectFacts('「這要收費嗎？」費用是 20 元。'), ['費用是 20 元。']);
 });
 
 test('no evidence -> every fact is not_addressed without calling the verifier', async () => {

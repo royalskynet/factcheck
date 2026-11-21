@@ -6,17 +6,31 @@ export const FACT = /(\d+(?:\.\d+)?\s*(?:[uU]\b|USDT?|USD|美元|元|%|％)|月�
 export const INFER = /(推論|推測|我認為|看起來|據我理解|未驗證|未證實|不確定|待確認|可能|也許|應該是|\binferr?ed\b|\bassum(?:e|ption)\b|\bunverified\b)/i;
 
 const QUOTES = new Map([['「', '」'], ['『', '』'], ['《', '》'], ['"', '"']]);
+const TERMINATOR = /[。！!？；;]/;
+const QUOTED_TERMINATOR = /[。！!；;.][」』"]*$/;
+const QUESTION_END = /[?？][」』》"]*\s*$/;
 
 function* splitLine(line) {
-  const closing = [];
+  const quotes = [];
   let start = 0;
+  let quoteStart = 0;
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-    if (char === closing.at(-1)) {
-      closing.pop();
-    } else if (QUOTES.has(char)) {
-      closing.push(QUOTES.get(char));
-    } else if (!closing.length && (/[。！!？；;]/.test(char) || (char === '.' && /\s/.test(line[i + 1] ?? '')))) {
+    let boundary = false;
+    if (char === quotes.at(-1)) {
+      quotes.pop();
+      if (!quotes.length && char !== '》') {
+        const quoted = line.slice(quoteStart, i);
+        boundary = QUOTED_TERMINATOR.test(quoted) ||
+          (!line.slice(start, quoteStart).trim() && QUESTION_END.test(quoted));
+      }
+    } else if (QUOTES.has(char) && (char !== '"' || (!/\d/.test(line[i - 1] ?? '') && line.includes('"', i + 1)))) {
+      if (!quotes.length) quoteStart = i;
+      quotes.push(QUOTES.get(char));
+    } else if (!quotes.length) {
+      boundary = TERMINATOR.test(char) || (char === '.' && /\s/.test(line[i + 1] ?? ''));
+    }
+    if (boundary) {
       yield line.slice(start, i + 1);
       start = i + 1;
     }
@@ -43,7 +57,7 @@ export function sentences(text) {
 }
 
 export function isFactClaim(s) {
-  return FACT.test(s) && !INFER.test(s) && !/[?？]$/.test(s);
+  return FACT.test(s) && !INFER.test(s) && !QUESTION_END.test(s);
 }
 
 /**
