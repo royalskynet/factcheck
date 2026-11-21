@@ -72,6 +72,37 @@ test('qualifiers after a quote apply to all sentences in it', async () => {
   }
 });
 
+test('denials and questions after a quote apply to every sentence in it', () => {
+  for (const quote of ['「月費是20元。年費是200元」', '「月費是20元。年費是200元。」']) {
+    const denial = `${quote}都是錯的。`;
+    const question = `${quote}嗎？`;
+    assert.deepEqual(sentences(denial), [denial]);
+    assert.deepEqual(selectFacts(denial), [denial]);
+    assert.deepEqual(sentences(question), [question]);
+    assert.deepEqual(selectFacts(question), []);
+  }
+});
+
+test('periods in abbreviations do not split the sentences in an English quote', () => {
+  const claim = '"The fee in the U.S. is $5."';
+  assert.deepEqual(sentences(claim), [claim]);
+  assert.deepEqual(selectFacts(claim), [claim]);
+  assert.deepEqual(sentences('"The fee in the U.S. is $5. It includes tax."'), [claim, '"It includes tax."']);
+});
+
+test('a run of terminators stays with its sentence and a question remains a question', () => {
+  for (const end of ['！？', '？！', '!?']) {
+    const question = `需要先付月費${end}`;
+    const fact = '費用是20元！！';
+    assert.deepEqual(sentences(`！！！！！！${question}${fact}`), [question, fact]);
+    assert.deepEqual(selectFacts(`${question}${fact}`), [fact]);
+    assert.equal(isFactClaim(`「${question}」`), false);
+  }
+  assert.deepEqual(sentences('官方說「費用是20元！！年費是200元。」'), [
+    '官方說「費用是20元！！」', '官方說「年費是200元。」',
+  ]);
+});
+
 test('an inch mark does not start an ASCII quote', () => {
   assert.deepEqual(
     sentences('螢幕是 6"。官方說"費用必須先付嗎？"後來才更正。'),

@@ -6,10 +6,14 @@ export const FACT = /(\d+(?:\.\d+)?\s*(?:[uU]\b|USDT?|USD|美元|元|%|％)|月�
 export const INFER = /(推論|推測|我認為|看起來|據我理解|未驗證|未證實|不確定|待確認|可能|也許|應該是|\binferr?ed\b|\bassum(?:e|ption)\b|\bunverified\b)/i;
 
 const QUOTES = new Map([['「', '」'], ['『', '』'], ['《', '》'], ['〈', '〉'], ['"', '"']]);
-const TERMINATOR = /[。！!？；;]/;
+const TERMINATOR = /[。！？!?；;]/;
+const SENTENCE_END = /[。！？!?；;]+|\.(?=\s)/;
 const QUOTED_TERMINATOR = /[。！!；;.][」』"]*$/;
-const QUESTION_END = /[?？][」』"’]*\s*$/;
+const QUESTION_END = /[?？][。！？!?；;.]*\s*$/;
+const CLOSING_QUOTES = /[」』"’]+\s*$/;
 const QUOTED_LINE = /^(?:「[^」]*」|『[^』]*』|"[^"]*"|‘[^’]*’)$/;
+const DENIAL = /(?:錯(?:的|誤)|有誤|不(?:正確|屬實|是真的|是事實)|並非事實|\b(?:false|wrong|incorrect|untrue|not true|inaccurate)\b)/i;
+const ABBREVIATION = /\b(?:(?:[a-z]\.){2,}|(?:mr|mrs|ms|dr|prof|sr|jr)\.)$/i;
 
 function* splitLine(line) {
   const quotes = [];
@@ -24,11 +28,15 @@ function* splitLine(line) {
       quotes.pop();
       if (!quotes.length && char !== '》' && char !== '〉') {
         const quoted = line.slice(quoteStart, i);
-        boundary = QUOTED_TERMINATOR.test(quoted) ||
-          (!(prefix + line.slice(start, quoteStart)).trim() && QUESTION_END.test(quoted));
-        const [tail] = line.slice(i + 1).split(TERMINATOR, 1)[0].split(/\.(?=\s)/, 1);
+        const quotedQuestion = QUESTION_END.test(quoted.replace(CLOSING_QUOTES, ''));
+        boundary = quotedQuestion
+          ? !(prefix + line.slice(start, quoteStart)).trim()
+          : QUOTED_TERMINATOR.test(quoted);
+        const rest = line.slice(i + 1);
+        const end = SENTENCE_END.exec(rest);
+        const tail = end ? rest.slice(0, end.index + end[0].length) : rest;
         const separateTail = boundary && /^[\s,，]*(?:但|不過|然而|(?:but|however)\b)/i.test(tail);
-        if (!separateTail && INFER.test(tail)) continue;
+        if (!separateTail && (INFER.test(tail) || DENIAL.test(tail) || QUESTION_END.test(tail))) continue;
         const attribution = prefix + line.slice(start, quoteStart + 1);
         for (const end of quoteEnds) {
           if (!line.slice(end + 1, i).trim()) break;
@@ -45,9 +53,16 @@ function* splitLine(line) {
       }
       quotes.push(QUOTES.get(char));
     } else {
-      const fullStop = char === '.' && /\s/.test(line[i + 1] ?? '');
-      if (!quotes.length) boundary = TERMINATOR.test(char) || fullStop;
-      else if (quotes.length === 1 && (/[。！!]/.test(char) || fullStop)) quoteEnds.push(i);
+      if (quotes.length <= 1 && TERMINATOR.test(char)) {
+        const runStart = i;
+        while (TERMINATOR.test(line[i + 1] ?? '')) i++;
+        const run = line.slice(runStart, i + 1);
+        if (!quotes.length) boundary = true;
+        else if (/[。！!]/.test(run) && !QUESTION_END.test(run)) quoteEnds.push(i);
+      } else if (char === '.' && /\s/.test(line[i + 1] ?? '')) {
+        if (!quotes.length) boundary = true;
+        else if (quotes.length === 1 && !ABBREVIATION.test(line.slice(quoteStart + 1, i + 1))) quoteEnds.push(i);
+      }
     }
     if (boundary) {
       yield prefix + line.slice(start, i + 1);
@@ -70,14 +85,15 @@ export function sentences(text) {
         .replace(/^\s*(?:[-*>#]+|\d+[.)、])\s*/, '')
         .replace(/\*\*/g, '')
         .trim();
-      if (s.length >= 6 && s.length <= 300) out.push(s);
+      if (s.length >= 6 && s.length <= 300 && !/^[\p{P}\s]+$/u.test(s)) out.push(s);
     }
   }
   return out;
 }
 
 export function isFactClaim(s) {
-  return FACT.test(s) && !INFER.test(s) && !(/[?？]\s*$/.test(s) || (QUOTED_LINE.test(s.trim()) && QUESTION_END.test(s)));
+  const ending = QUOTED_LINE.test(s.trim()) ? s.replace(CLOSING_QUOTES, '') : s;
+  return FACT.test(s) && !INFER.test(s) && !QUESTION_END.test(ending);
 }
 
 /**
