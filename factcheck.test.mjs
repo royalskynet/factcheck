@@ -40,6 +40,24 @@ test('a quote ending in a full stop ends the sentence after the closing quote', 
   assert.deepEqual(selectFacts(`${claim}但可能會漲。`), [claim]);
 });
 
+test('fact checking keeps factual sentences and leaves speculation in the same quote unchecked', async () => {
+  const seen = [];
+  const claim = '官方說「費用是20元。」';
+  const result = await checkFacts({
+    text: '官方說「費用是20元。可能會調整。」',
+    evidence: '費用是20元。',
+    verify: async ({ claims }) => {
+      seen.push(...claims);
+      return { claims: [{ verdict: 'supported', gate: 'auto' }] };
+    },
+  });
+  assert.deepEqual(seen.map((s) => s.split(' [source-level claim:')[0]), [claim]);
+  assert.deepEqual(result.claims, [claim]);
+  assert.deepEqual(selectFacts('官方說「費用可能會調整。月費是20元。年費是200元。」'), [
+    '官方說「月費是20元。」', '官方說「年費是200元。」',
+  ]);
+});
+
 test('an inch mark does not start an ASCII quote', () => {
   assert.deepEqual(
     sentences('螢幕是 6"。官方說"費用必須先付嗎？"後來才更正。'),
@@ -58,6 +76,13 @@ test('standalone quoted questions are not factual claims', () => {
 
 test('claims can end in a title that contains a question', () => {
   for (const claim of ['手冊包含《需要收費嗎？》', '手冊包含〈需要收費嗎？〉']) {
+    assert.equal(isFactClaim(claim), true);
+    assert.deepEqual(selectFacts(claim), [claim]);
+  }
+});
+
+test('a quoted question does not turn an enclosing statement into a question', () => {
+  for (const claim of ['手冊包含「需要收費嗎？」', '官方說「費用必須先付嗎？」', '官方說"費用必須先付嗎？"']) {
     assert.equal(isFactClaim(claim), true);
     assert.deepEqual(selectFacts(claim), [claim]);
   }

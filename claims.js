@@ -9,11 +9,14 @@ const QUOTES = new Map([['「', '」'], ['『', '』'], ['《', '》'], ['〈', 
 const TERMINATOR = /[。！!？；;]/;
 const QUOTED_TERMINATOR = /[。！!；;.][」』"]*$/;
 const QUESTION_END = /[?？][」』"’]*\s*$/;
+const QUOTED_LINE = /^(?:「[^」]*」|『[^』]*』|"[^"]*"|‘[^’]*’)$/;
 
 function* splitLine(line) {
   const quotes = [];
   let start = 0;
   let quoteStart = 0;
+  let quoteEnds = [];
+  let prefix = '';
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     let boundary = false;
@@ -22,20 +25,34 @@ function* splitLine(line) {
       if (!quotes.length && char !== '》' && char !== '〉') {
         const quoted = line.slice(quoteStart, i);
         boundary = QUOTED_TERMINATOR.test(quoted) ||
-          (!line.slice(start, quoteStart).trim() && QUESTION_END.test(quoted));
+          (!(prefix + line.slice(start, quoteStart)).trim() && QUESTION_END.test(quoted));
+        const attribution = prefix + line.slice(start, quoteStart + 1);
+        for (const end of quoteEnds) {
+          if (!line.slice(end + 1, i).trim()) break;
+          yield prefix + line.slice(start, end + 1).trimEnd() + char;
+          prefix = attribution;
+          start = end + 1;
+          while (/\s/.test(line[start] ?? '')) start++;
+        }
       }
     } else if (QUOTES.has(char) && (char !== '"' || (!/\d/.test(line[i - 1] ?? '') && line.includes('"', i + 1)))) {
-      if (!quotes.length) quoteStart = i;
+      if (!quotes.length) {
+        quoteStart = i;
+        quoteEnds = [];
+      }
       quotes.push(QUOTES.get(char));
-    } else if (!quotes.length) {
-      boundary = TERMINATOR.test(char) || (char === '.' && /\s/.test(line[i + 1] ?? ''));
+    } else {
+      const fullStop = char === '.' && /\s/.test(line[i + 1] ?? '');
+      if (!quotes.length) boundary = TERMINATOR.test(char) || fullStop;
+      else if (quotes.length === 1 && (/[。！!]/.test(char) || fullStop)) quoteEnds.push(i);
     }
     if (boundary) {
-      yield line.slice(start, i + 1);
+      yield prefix + line.slice(start, i + 1);
       start = i + 1;
+      prefix = '';
     }
   }
-  yield line.slice(start);
+  yield prefix + line.slice(start);
 }
 
 /** Sentence-level split: drops code blocks, list markers and bold markers. */
@@ -57,7 +74,7 @@ export function sentences(text) {
 }
 
 export function isFactClaim(s) {
-  return FACT.test(s) && !INFER.test(s) && !QUESTION_END.test(s);
+  return FACT.test(s) && !INFER.test(s) && !(/[?？]\s*$/.test(s) || (QUOTED_LINE.test(s.trim()) && QUESTION_END.test(s)));
 }
 
 /**
