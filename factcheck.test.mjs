@@ -40,6 +40,69 @@ test('a quote ending in a full stop ends the sentence after the closing quote', 
   assert.deepEqual(selectFacts(`${claim}但可能會漲。`), [claim]);
 });
 
+test('fact checking keeps factual sentences and leaves speculation in the same quote unchecked', async () => {
+  const seen = [];
+  const claim = '官方說「費用是20元。」';
+  const result = await checkFacts({
+    text: '官方說「費用是20元。可能會調整。」',
+    evidence: '費用是20元。',
+    verify: async ({ claims }) => {
+      seen.push(...claims);
+      return { claims: [{ verdict: 'supported', gate: 'auto' }] };
+    },
+  });
+  assert.deepEqual(seen.map((s) => s.split(' [source-level claim:')[0]), [claim]);
+  assert.deepEqual(result.claims, [claim]);
+  assert.deepEqual(selectFacts('官方說「費用可能會調整。月費是20元。年費是200元。」'), [
+    '官方說「月費是20元。」', '官方說「年費是200元。」',
+  ]);
+});
+
+test('qualifiers after a quote apply to all sentences in it', async () => {
+  for (const text of ['「月費是20元。年費是200元」均未驗證。', '「月費是20元。年費是200元。」均未驗證。']) {
+    assert.deepEqual(sentences(text), [text]);
+    const result = await checkFacts({
+      text,
+      evidence: '費用表',
+      verify: async () => assert.fail('qualified quotes must not reach the verifier'),
+    });
+    assert.deepEqual(result.claims, []);
+    assert.equal(result.skipped, 'no_claim');
+    assert.deepEqual(selectFacts(`${text}費用必須先付。`), ['費用必須先付。']);
+  }
+});
+
+test('denials and questions after a quote apply to every sentence in it', () => {
+  for (const quote of ['「月費是20元。年費是200元」', '「月費是20元。年費是200元。」']) {
+    const denial = `${quote}都是錯的。`;
+    const question = `${quote}嗎？`;
+    assert.deepEqual(sentences(denial), [denial]);
+    assert.deepEqual(selectFacts(denial), [denial]);
+    assert.deepEqual(sentences(question), [question]);
+    assert.deepEqual(selectFacts(question), []);
+  }
+});
+
+test('periods in abbreviations do not split the sentences in an English quote', () => {
+  const claim = '"The fee in the U.S. is $5."';
+  assert.deepEqual(sentences(claim), [claim]);
+  assert.deepEqual(selectFacts(claim), [claim]);
+  assert.deepEqual(sentences('"The fee in the U.S. is $5. It includes tax."'), [claim, '"It includes tax."']);
+});
+
+test('a run of terminators stays with its sentence and a question remains a question', () => {
+  for (const end of ['！？', '？！', '!?']) {
+    const question = `需要先付月費${end}`;
+    const fact = '費用是20元！！';
+    assert.deepEqual(sentences(`！！！！！！${question}${fact}`), [question, fact]);
+    assert.deepEqual(selectFacts(`${question}${fact}`), [fact]);
+    assert.equal(isFactClaim(`「${question}」`), false);
+  }
+  assert.deepEqual(sentences('官方說「費用是20元！！年費是200元。」'), [
+    '官方說「費用是20元！！」', '官方說「年費是200元。」',
+  ]);
+});
+
 test('an inch mark does not start an ASCII quote', () => {
   assert.deepEqual(
     sentences('螢幕是 6"。官方說"費用必須先付嗎？"後來才更正。'),
@@ -58,6 +121,13 @@ test('standalone quoted questions are not factual claims', () => {
 
 test('claims can end in a title that contains a question', () => {
   for (const claim of ['手冊包含《需要收費嗎？》', '手冊包含〈需要收費嗎？〉']) {
+    assert.equal(isFactClaim(claim), true);
+    assert.deepEqual(selectFacts(claim), [claim]);
+  }
+});
+
+test('a quoted question does not turn an enclosing statement into a question', () => {
+  for (const claim of ['手冊包含「需要收費嗎？」', '官方說「費用必須先付嗎？」', '官方說"費用必須先付嗎？"']) {
     assert.equal(isFactClaim(claim), true);
     assert.deepEqual(selectFacts(claim), [claim]);
   }
